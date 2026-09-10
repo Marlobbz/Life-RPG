@@ -62,7 +62,7 @@ esp_err_t rpg_storage_load_player(rpg_player_t *player)
     }
 
     const char *stat_keys[RPG_STAT_COUNT] = {
-        "s_int", "s_str", "s_agi", "s_wis",
+        "body", "code", "know",
     };
     for (int i = 0; i < RPG_STAT_COUNT; i++) {
         if (nvs_get_u16(handle, stat_keys[i], &value_u16) == ESP_OK) {
@@ -94,7 +94,7 @@ esp_err_t rpg_storage_save_player(const rpg_player_t *player)
     if (err == ESP_OK) err = nvs_set_u32(handle, "total_xp", player->total_xp);
 
     const char *stat_keys[RPG_STAT_COUNT] = {
-        "s_int", "s_str", "s_agi", "s_wis",
+        "body", "code", "know",
     };
     for (int i = 0; i < RPG_STAT_COUNT && err == ESP_OK; i++) {
         err = nvs_set_u16(handle, stat_keys[i], player->stats[i]);
@@ -129,6 +129,13 @@ esp_err_t rpg_storage_load_quests(rpg_quest_t *quests, uint32_t count)
         return err;
     }
 
+    uint32_t quest_version = 0;
+    if (nvs_get_u32(handle, "q_ver", &quest_version) != ESP_OK ||
+        quest_version != RPG_QUEST_VERSION) {
+        nvs_close(handle);
+        return ESP_ERR_NVS_NOT_FOUND;
+    }
+
     for (uint32_t i = 0; i < count; i++) {
         char key[17];
         snprintf(key, sizeof(key), "q_done%u", (unsigned)i);
@@ -158,6 +165,12 @@ esp_err_t rpg_storage_save_quests(const rpg_quest_t *quests, uint32_t count)
     nvs_handle_t handle;
     err = nvs_open(RPG_NVS_NAMESPACE, NVS_READWRITE, &handle);
     if (err != ESP_OK) {
+        return err;
+    }
+
+    err = nvs_set_u32(handle, "q_ver", RPG_QUEST_VERSION);
+    if (err != ESP_OK) {
+        nvs_close(handle);
         return err;
     }
 

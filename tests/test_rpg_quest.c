@@ -17,15 +17,19 @@ int main(void)
     assert(awarded == 20);
     assert(quests[0].completed == true);
     assert(player.xp == 20);
-    assert(player.stats[RPG_STAT_WIS] == 1);
+    assert(player.stats[RPG_STAT_KNOWLEDGE] == 2);
 
     assert(rpg_quest_complete(&quests[0], &player) == 0);
     assert(player.xp == 20);
-    assert(player.stats[RPG_STAT_WIS] == 1);
+    assert(player.stats[RPG_STAT_KNOWLEDGE] == 2);
 
-    assert(rpg_quest_complete(&quests[1], &player) == 25);
-    assert(player.xp == 45);
-    assert(player.stats[RPG_STAT_INT] == 1);
+    assert(rpg_quest_complete(&quests[1], &player) == 40);
+    assert(player.xp == 60);
+    assert(player.stats[RPG_STAT_BODY] == 3);
+
+    assert(rpg_quest_complete(&quests[2], &player) == 25);
+    assert(player.xp == 85);
+    assert(player.stats[RPG_STAT_CODE] == 2);
 
     return 0;
 }

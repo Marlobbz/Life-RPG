@@ -10,6 +10,7 @@
 #define RPG_QUEST_MAX_DAILY  3u
 #define RPG_QUEST_TITLE_MAX  24u
 #define RPG_QUEST_DESC_MAX   64u
+#define RPG_QUEST_VERSION    2u
 
 typedef struct {
     char title[RPG_QUEST_TITLE_MAX];

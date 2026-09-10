@@ -7,10 +7,9 @@
 #include <stdint.h>
 
 typedef enum {
-    RPG_STAT_INT = 0,
-    RPG_STAT_STR,
-    RPG_STAT_AGI,
-    RPG_STAT_WIS,
+    RPG_STAT_BODY = 0,      // 身体健康程度,由运动/步行任务提升
+    RPG_STAT_CODE,          // 代码能力,由编程/CTF 任务提升
+    RPG_STAT_KNOWLEDGE,     // 知识量,由背单词/学习/阅读任务提升
     RPG_STAT_COUNT,
 } rpg_stat_t;
 
@@ -18,7 +17,7 @@ typedef struct {
     uint32_t level;       // 当前等级,最小为 1
     uint32_t xp;          // 当前等级内已累计经验
     uint32_t total_xp;    // 角色历史累计经验,升级不清零
-    uint16_t stats[RPG_STAT_COUNT]; // INT / STR / AGI / WIS
+    uint16_t stats[RPG_STAT_COUNT]; // BODY / CODE / KNOWLEDGE
 } rpg_player_t;
 
 // 把玩家状态重置为 Level 1 / 0 XP / 全属性 0。

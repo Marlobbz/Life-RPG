@@ -5,46 +5,53 @@
 
 static const rpg_quest_t TEMPLATES[] = {
     {
-        .title = "Study 30 min",
-        .description = "Focus on one subject for 30 minutes.",
+        .title = "Memorize 30 words",
+        .description = "Memorize thirty new words.",
         .xp_reward = 20,
-        .stat = RPG_STAT_WIS,
-        .stat_amount = 1,
+        .stat = RPG_STAT_KNOWLEDGE,
+        .stat_amount = 2,
+    },
+    {
+        .title = "Exercise 2 hours",
+        .description = "Work out for two hours.",
+        .xp_reward = 40,
+        .stat = RPG_STAT_BODY,
+        .stat_amount = 3,
     },
     {
         .title = "Code 1 problem",
         .description = "Solve one programming problem.",
         .xp_reward = 25,
-        .stat = RPG_STAT_INT,
+        .stat = RPG_STAT_CODE,
+        .stat_amount = 2,
+    },
+    {
+        .title = "Study 30 min",
+        .description = "Focus on one subject for thirty minutes.",
+        .xp_reward = 20,
+        .stat = RPG_STAT_KNOWLEDGE,
         .stat_amount = 1,
     },
     {
         .title = "Read 10 pages",
         .description = "Read ten pages of a book.",
         .xp_reward = 10,
-        .stat = RPG_STAT_WIS,
+        .stat = RPG_STAT_KNOWLEDGE,
         .stat_amount = 1,
     },
     {
-        .title = "Exercise 20 min",
-        .description = "Move your body for twenty minutes.",
-        .xp_reward = 15,
-        .stat = RPG_STAT_STR,
+        .title = "Walk 3000 steps",
+        .description = "Walk three thousand steps.",
+        .xp_reward = 10,
+        .stat = RPG_STAT_BODY,
         .stat_amount = 1,
     },
     {
         .title = "Solve 1 CTF",
         .description = "Complete one security challenge.",
         .xp_reward = 30,
-        .stat = RPG_STAT_INT,
+        .stat = RPG_STAT_CODE,
         .stat_amount = 2,
-    },
-    {
-        .title = "Walk 3000 steps",
-        .description = "Walk three thousand steps.",
-        .xp_reward = 10,
-        .stat = RPG_STAT_AGI,
-        .stat_amount = 1,
     },
 };
 
@@ -61,7 +68,7 @@ void rpg_quest_init(rpg_quest_t *quests, uint32_t count)
         memset(quests[i].title, 0, sizeof(quests[i].title));
         memset(quests[i].description, 0, sizeof(quests[i].description));
         quests[i].xp_reward = 0;
-        quests[i].stat = RPG_STAT_INT;
+        quests[i].stat = RPG_STAT_BODY;
         quests[i].stat_amount = 0;
         quests[i].completed = false;
     }

@@ -115,11 +115,48 @@ static void refresh_player(void)
     lv_label_set_text_fmt(s_xp, "XP %u / %u",
                           (unsigned)s_player.xp,
                           (unsigned)rpg_xp_to_next_level(s_player.level));
-    lv_label_set_text_fmt(s_stats, "INT %u  STR %u\nAGI %u  WIS %u",
-                          (unsigned)s_player.stats[RPG_STAT_INT],
-                          (unsigned)s_player.stats[RPG_STAT_STR],
-                          (unsigned)s_player.stats[RPG_STAT_AGI],
-                          (unsigned)s_player.stats[RPG_STAT_WIS]);
+    lv_label_set_text_fmt(s_stats, "BODY %u  CODE %u\nKNOWLEDGE %u",
+                          (unsigned)s_player.stats[RPG_STAT_BODY],
+                          (unsigned)s_player.stats[RPG_STAT_CODE],
+                          (unsigned)s_player.stats[RPG_STAT_KNOWLEDGE]);
+}
+
+static void fx_fade(void *obj, int32_t value)
+{
+    lv_obj_set_style_opa((lv_obj_t *)obj, (lv_opa_t)value, 0);
+}
+
+static void play_completion_feedback(void)
+{
+    if (!s_scr) return;
+
+    static const uint32_t COLORS[] = {
+        UI_YELLOW, UI_ORANGE, UI_RED, 0x39FF88, 0x1689E8, 0xFFB23E,
+    };
+    static const int OFFSETS[][2] = {
+        { -42, -28 }, {  44, -32 }, { -52,  22 },
+        {  54,  24 }, { -24, -48 }, {  28,  46 },
+    };
+
+    for (int i = 0; i < (int)(sizeof(COLORS) / sizeof(COLORS[0])); i++) {
+        lv_obj_t *p = lv_obj_create(s_scr);
+        lv_obj_remove_flag(p, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_pos(p, 120 + OFFSETS[i][0], 150 + OFFSETS[i][1]);
+        lv_obj_set_size(p, 7, 7);
+        lv_obj_set_style_radius(p, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(p, 0, 0);
+        lv_obj_set_style_bg_color(p, lv_color_hex(COLORS[i]), 0);
+        lv_obj_set_style_opa(p, LV_OPA_COVER, 0);
+
+        lv_anim_t a;
+        lv_anim_init(&a);
+        lv_anim_set_var(&a, p);
+        lv_anim_set_exec_cb(&a, fx_fade);
+        lv_anim_set_values(&a, LV_OPA_COVER, LV_OPA_TRANSP);
+        lv_anim_set_duration(&a, 900);
+        lv_anim_set_path_cb(&a, lv_anim_path_linear);
+        lv_anim_start(&a);
+    }
 }
 
 static void refresh_home(void)
@@ -392,6 +429,7 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
                     lv_label_set_text_fmt(s_quest_status, "QUEST COMPLETE +%u XP",
                                           (unsigned)awarded);
                 }
+                play_completion_feedback();
             }
             life_rpg_jump_mascot();
         }
