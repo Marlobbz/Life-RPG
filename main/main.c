@@ -11,6 +11,7 @@
 #include "bsp_battery.h"
 #include "bsp_pins.h"      // 错误日志里要打印 BSP_LCD_* 引脚号
 #include "demo.h"
+#include "fap_screenshot.h"
 #include "ui_pixel.h"
 #include "lvgl.h"
 #include "esp_log.h"
@@ -26,6 +27,7 @@ static const demo_entry_t DEMOS[] = {
     { "Wi-Fi",   demo_wifi_enter,    demo_wifi_exit,    demo_wifi_key    },
     { "BLE",     demo_ble_enter,     demo_ble_exit,     demo_ble_key     },
     { "Low Power", demo_low_power_enter, demo_low_power_exit, demo_low_power_key },
+    { "Life RPG", demo_life_rpg_enter, demo_life_rpg_exit, demo_life_rpg_key },
 };
 #define DEMO_COUNT (sizeof(DEMOS) / sizeof(DEMOS[0]))
 
@@ -38,6 +40,7 @@ static lv_obj_t *s_rows[DEMO_COUNT];
 static lv_obj_t *s_mascot;
 static int  s_sel;                 // 当前选中项
 static int  s_active = -1;         // 当前所在演示页;-1 = 在菜单
+static volatile bool s_retain_demo_pages;
 
 static void menu_refresh(void) {
     for (size_t i = 0; i < DEMO_COUNT; i++) {
@@ -74,32 +77,28 @@ static void enter_menu(void) {
     menu_build();
 }
 
+// 直接启动 Life RPG 后,官方 demo 菜单不再被引用,链接器会裁剪它们。
+// 这里显式引用 DEMOS[],强制保留全部官方 demo 页面及其依赖。
+static void retain_demo_pages(void) {
+    // 正常情况下这个分支不会执行;它只是强制链接所有 demo 页面。
+    if (s_retain_demo_pages) {
+        for (size_t i = 0; i < DEMO_COUNT; i++) {
+            DEMOS[i].enter();
+            DEMOS[i].key(BSP_BTN_OK, BSP_BTN_PRESS);
+            DEMOS[i].exit();
+        }
+    }
+}
+
 // 按键回调运行在 button 组件的任务里,操作 LVGL 必须加锁。
 static void on_key(bsp_btn_t btn, bsp_btn_ev_t ev, void *user) {
     (void)user;
     if (!bsp_lvgl_lock(500)) return;
 
-    if (s_active >= 0) {
-        if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {     // 统一返回
-            DEMOS[s_active].exit();
-            enter_menu();
-        } else {
-            DEMOS[s_active].key(btn, ev);
-        }
-    } else if (ev == BSP_BTN_CLICK) {
-        if (btn == BSP_BTN_UP)   { s_sel = (s_sel + DEMO_COUNT - 1) % DEMO_COUNT; menu_refresh(); }
-        if (btn == BSP_BTN_DOWN) { s_sel = (s_sel + 1) % DEMO_COUNT;              menu_refresh(); }
-        if (btn == BSP_BTN_OK && s_ok[s_sel]) {
-            s_active = s_sel;
-            ui_pixel_mascot_jump(s_mascot);
-            lv_obj_delete(s_menu_scr);
-            s_menu_scr = NULL;
-            s_mascot = NULL;
-            DEMOS[s_active].enter();
-        } else if (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN) {
-            ui_pixel_mascot_jump(s_mascot);
-        }
-    }
+    // 直接启动 Life RPG,不再进入官方 demo 菜单。
+    // 长按 OK 由 Life RPG 页面自行忽略,不作为返回菜单动作。
+    demo_life_rpg_key(btn, ev);
+
     bsp_lvgl_unlock();
 }
 
@@ -131,8 +130,11 @@ void app_main(void) {
     s_ok[4] = true;                                    // 页面内按需初始化并显示错误
     s_ok[5] = true;
     s_ok[6] = true;
+    s_ok[7] = true;
 
-    if (bsp_lvgl_lock(1000)) { enter_menu(); bsp_lvgl_unlock(); }
+    retain_demo_pages();
+
+    if (bsp_lvgl_lock(1000)) { demo_life_rpg_enter(); bsp_lvgl_unlock(); }
 
     ESP_LOGI(TAG, "就绪:Display=%d Button=%d Audio=%d Battery=%d",
              s_ok[0], s_ok[1], s_ok[2], s_ok[3]);
