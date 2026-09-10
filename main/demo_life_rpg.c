@@ -588,7 +588,7 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 
     switch (s_view) {
     case LIFE_VIEW_HOME:
-        if (ev != BSP_BTN_CLICK) return;
+        if (ev != BSP_BTN_PRESS) return;
         if (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN) {
             s_home_sel = (s_home_sel + 1) % 3;
             refresh_home();
@@ -609,7 +609,7 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         break;
 
     case LIFE_VIEW_PLAYER:
-        if (ev == BSP_BTN_CLICK && (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN)) {
+        if (ev == BSP_BTN_PRESS && (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN)) {
             int delta = (btn == BSP_BTN_UP) ? 1 : -1;
             int day = (int)s_dev_date.day + delta;
             if (day < 1) day += 31;
@@ -637,7 +637,7 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         break;
 
     case LIFE_VIEW_QUEST_LIST:
-        if (ev != BSP_BTN_CLICK) return;
+        if (ev != BSP_BTN_PRESS) return;
         if (btn == BSP_BTN_UP) {
             s_quest_sel = (s_quest_sel + RPG_QUEST_MAX_DAILY - 1) % RPG_QUEST_MAX_DAILY;
             refresh_quest_list();
@@ -651,7 +651,7 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         break;
 
     case LIFE_VIEW_QUEST_DETAIL:
-        if (ev != BSP_BTN_CLICK) return;
+        if (ev != BSP_BTN_PRESS) return;
         if (btn == BSP_BTN_OK) {
             uint32_t old_level = s_player.level;
             uint32_t awarded = rpg_quest_complete(&s_quests[s_quest_sel], &s_player);
