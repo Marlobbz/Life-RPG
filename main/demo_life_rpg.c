@@ -25,6 +25,7 @@ static lv_obj_t *s_xp;
 static lv_obj_t *s_stats;
 static lv_obj_t *s_mascot;
 static rpg_player_t s_player;
+static int s_mascot_base_y;
 
 // 右上角显示电量。官方基线约定 UI 默认显示电池,读不到时优雅降级为 "--"。
 static void refresh_battery(void)
@@ -33,12 +34,12 @@ static void refresh_battery(void)
 
     int soc = bsp_battery_soc();
     if (soc < 0) {
-        lv_label_set_text(s_battery, "--%");
+        lv_label_set_text(s_battery, "BATT --");
         lv_obj_set_style_text_color(s_battery, lv_color_hex(UI_MUTED), 0);
         return;
     }
 
-    lv_label_set_text_fmt(s_battery, "%d%%", soc);
+    lv_label_set_text_fmt(s_battery, "BATT %d%%", soc);
     lv_obj_set_style_text_color(s_battery,
                                 (soc < 20) ? lv_color_hex(0xFF5A5A)
                                            : lv_color_hex(UI_INK),
@@ -58,6 +59,16 @@ static void refresh_player(void)
                           (unsigned)s_player.stats[RPG_STAT_STR],
                           (unsigned)s_player.stats[RPG_STAT_AGI],
                           (unsigned)s_player.stats[RPG_STAT_WIS]);
+}
+
+// 官方 ui_pixel_mascot_jump() 会从当前 y 再向上跳,连续触发会累积漂移。
+// Life RPG 页面先把它放回基准位置再跳,保证每次都在同一高度反馈。
+static void life_rpg_jump_mascot(void)
+{
+    if (!s_mascot) return;
+
+    lv_obj_set_y(s_mascot, s_mascot_base_y);
+    ui_pixel_mascot_jump(s_mascot);
 }
 
 void demo_life_rpg_enter(void)
@@ -81,7 +92,7 @@ void demo_life_rpg_enter(void)
     // 电量放在蓝天区域,避开右上角已有的白云装饰。
     s_battery = lv_label_create(s_scr);
     lv_obj_set_style_text_font(s_battery, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(s_battery, 196, 27);
+    lv_obj_set_pos(s_battery, 174, 27);
     refresh_battery();
 
     lv_obj_t *panel = ui_pixel_panel_create(s_scr, 20, 78, 200, 145, UI_PAPER);
@@ -108,6 +119,7 @@ void demo_life_rpg_enter(void)
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
 
     s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
+    s_mascot_base_y = 238;
     refresh_player();
     lv_screen_load(s_scr);
 }
@@ -135,11 +147,11 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
             rpg_storage_save_player(&s_player);
         }
         refresh_player();
-        ui_pixel_mascot_jump(s_mascot);
+        life_rpg_jump_mascot();
         return;
     }
 
-    if (ev == BSP_BTN_PRESS) {
-        ui_pixel_mascot_jump(s_mascot);
+    if (btn != BSP_BTN_OK && ev == BSP_BTN_PRESS) {
+        life_rpg_jump_mascot();
     }
 }
