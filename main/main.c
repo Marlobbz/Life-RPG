@@ -11,6 +11,7 @@
 #include "bsp_battery.h"
 #include "bsp_pins.h"      // 错误日志里要打印 BSP_LCD_* 引脚号
 #include "demo.h"
+#include "fap_screenshot.h"
 #include "ui_pixel.h"
 #include "lvgl.h"
 #include "esp_log.h"
@@ -134,6 +135,7 @@ void app_main(void) {
     retain_demo_pages();
 
     if (bsp_lvgl_lock(1000)) { demo_life_rpg_enter(); bsp_lvgl_unlock(); }
+    fap_screenshot_start();
 
     ESP_LOGI(TAG, "就绪:Display=%d Button=%d Audio=%d Battery=%d",
              s_ok[0], s_ok[1], s_ok[2], s_ok[3]);
