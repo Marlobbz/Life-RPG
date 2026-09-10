@@ -40,6 +40,10 @@ run_static_checks() {
         tests/test_rpg_streak.c main/rpg_streak.c main/rpg_date.c \
         -o "${test_dir}/test_rpg_streak"
     "${test_dir}/test_rpg_streak"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_rpg_pet.c main/rpg_pet.c \
+        -o "${test_dir}/test_rpg_pet"
+    "${test_dir}/test_rpg_pet"
     python3 tests/test_verify_firmware.py
     rm -rf "${test_dir}"
     echo "Host tests: PASS"

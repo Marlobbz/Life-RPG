@@ -6,6 +6,7 @@
 #include "rpg_player.h"
 #include "rpg_quest.h"
 #include "rpg_streak.h"
+#include "rpg_pet.h"
 #include "esp_err.h"
 
 // 初始化 NVS。幂等;失败时不自动擦除已有数据。
@@ -30,6 +31,12 @@ esp_err_t rpg_storage_load_streak(rpg_streak_t *streak);
 
 // 保存连续天数状态。
 esp_err_t rpg_storage_save_streak(const rpg_streak_t *streak);
+
+// 载入宠物状态和最近更新时间。
+esp_err_t rpg_storage_load_pet(rpg_pet_t *pet, uint32_t *last_serial);
+
+// 保存宠物状态和最近更新时间。
+esp_err_t rpg_storage_save_pet(const rpg_pet_t *pet, uint32_t last_serial);
 
 // 只清除 Life RPG 自己的 namespace,不清除 cardid 或其他应用数据。
 esp_err_t rpg_storage_reset(void);

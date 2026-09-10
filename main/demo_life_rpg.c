@@ -13,6 +13,7 @@
 #include "rpg_quest.h"
 #include "rpg_date.h"
 #include "rpg_streak.h"
+#include "rpg_pet.h"
 #include "rpg_storage.h"
 #include "ui_pixel.h"
 #include "esp_log.h"
@@ -26,6 +27,7 @@ typedef enum {
     LIFE_VIEW_PLAYER,
     LIFE_VIEW_QUEST_LIST,
     LIFE_VIEW_QUEST_DETAIL,
+    LIFE_VIEW_PET,
 } life_view_t;
 
 static lv_obj_t *s_scr;
@@ -34,7 +36,11 @@ static lv_obj_t *s_level;
 static lv_obj_t *s_xp;
 static lv_obj_t *s_stats;
 static lv_obj_t *s_streak_label;
-static lv_obj_t *s_home_cards[2];
+static lv_obj_t *s_home_cards[3];
+static lv_obj_t *s_pet_mood;
+static lv_obj_t *s_pet_energy;
+static lv_obj_t *s_pet_trust;
+static lv_obj_t *s_pet_state;
 static lv_obj_t *s_quest_rows[RPG_QUEST_MAX_DAILY];
 static lv_obj_t *s_quest_row_labels[RPG_QUEST_MAX_DAILY];
 static lv_obj_t *s_quest_title;
@@ -46,6 +52,8 @@ static lv_obj_t *s_mascot;
 static rpg_player_t s_player;
 static rpg_quest_t s_quests[RPG_QUEST_MAX_DAILY];
 static rpg_streak_t s_streak;
+static rpg_pet_t s_pet;
+static uint32_t s_pet_last_serial;
 static rpg_date_t s_dev_date;
 static life_view_t s_view;
 static int s_home_sel;
@@ -98,13 +106,17 @@ static void clear_screen(void)
     s_xp = NULL;
     s_stats = NULL;
     s_streak_label = NULL;
+    s_pet_mood = NULL;
+    s_pet_energy = NULL;
+    s_pet_trust = NULL;
+    s_pet_state = NULL;
     s_mascot = NULL;
     s_quest_title = NULL;
     s_quest_desc = NULL;
     s_quest_reward = NULL;
     s_quest_status = NULL;
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
         s_home_cards[i] = NULL;
     }
     for (uint32_t i = 0; i < RPG_QUEST_MAX_DAILY; i++) {
@@ -142,6 +154,17 @@ static void refresh_player(void)
                               (unsigned)s_streak.current_streak,
                               done_today ? "DONE" : "OPEN");
     }
+}
+
+static void refresh_pet(void)
+{
+    if (!s_pet_mood || !s_pet_energy || !s_pet_trust || !s_pet_state) return;
+
+    lv_label_set_text_fmt(s_pet_mood, "MOOD %u", (unsigned)s_pet.mood);
+    lv_label_set_text_fmt(s_pet_energy, "ENERGY %u", (unsigned)s_pet.energy);
+    lv_label_set_text_fmt(s_pet_trust, "TRUST %u", (unsigned)s_pet.trust);
+    lv_label_set_text_fmt(s_pet_state, "STATE: %s",
+                          rpg_pet_state_name(rpg_pet_state(&s_pet)));
 }
 
 static void fx_fade(void *obj, int32_t value)
@@ -227,10 +250,10 @@ static void build_home(void)
     s_scr = ui_pixel_screen_create("LIFE RPG");
     add_battery(s_scr);
 
-    static const char *HOME_NAMES[] = { "PLAYER", "QUEST" };
-    for (int i = 0; i < 2; i++) {
-        int y = 82 + i * 52;
-        s_home_cards[i] = ui_pixel_panel_create(s_scr, 25, y, 190, 44, UI_PAPER);
+    static const char *HOME_NAMES[] = { "PLAYER", "QUEST", "PET" };
+    for (int i = 0; i < 3; i++) {
+        int y = 72 + i * 50;
+        s_home_cards[i] = ui_pixel_panel_create(s_scr, 25, y, 190, 42, UI_PAPER);
 
         lv_obj_t *label = lv_label_create(s_home_cards[i]);
         lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
@@ -243,7 +266,7 @@ static void build_home(void)
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(UI_INK), 0);
     lv_label_set_text(hint, "UP/DOWN SELECT  OK ENTER");
-    lv_obj_set_pos(hint, 20, 202);
+    lv_obj_set_pos(hint, 20, 218);
 
     s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
     s_mascot_base_y = 238;
@@ -357,11 +380,54 @@ static void build_quest_detail(void)
     lv_screen_load(s_scr);
 }
 
+static void build_pet(void)
+{
+    clear_screen();
+
+    s_scr = ui_pixel_screen_create("PET");
+    add_battery(s_scr);
+
+    lv_obj_t *panel = ui_pixel_panel_create(s_scr, 12, 58, 216, 172, UI_PAPER);
+
+    s_pet_mood = lv_label_create(panel);
+    lv_obj_set_style_text_font(s_pet_mood, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(s_pet_mood, lv_color_hex(UI_INK), 0);
+    lv_obj_align(s_pet_mood, LV_ALIGN_TOP_MID, 0, 8);
+
+    s_pet_energy = lv_label_create(panel);
+    lv_obj_set_style_text_font(s_pet_energy, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_pet_energy, lv_color_hex(UI_SKY_DARK), 0);
+    lv_obj_align(s_pet_energy, LV_ALIGN_TOP_MID, 0, 42);
+
+    s_pet_trust = lv_label_create(panel);
+    lv_obj_set_style_text_font(s_pet_trust, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_pet_trust, lv_color_hex(UI_INK), 0);
+    lv_obj_align(s_pet_trust, LV_ALIGN_TOP_MID, 0, 68);
+
+    s_pet_state = lv_label_create(panel);
+    lv_obj_set_style_text_font(s_pet_state, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(s_pet_state, lv_color_hex(UI_ORANGE), 0);
+    lv_obj_align(s_pet_state, LV_ALIGN_TOP_MID, 0, 96);
+
+    lv_obj_t *hint = lv_label_create(panel);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(UI_SKY_DARK), 0);
+    lv_label_set_text(hint, "DBL: BACK");
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -6);
+
+    s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
+    s_mascot_base_y = 238;
+    refresh_pet();
+    lv_screen_load(s_scr);
+}
+
 void demo_life_rpg_enter(void)
 {
     rpg_player_init(&s_player);
     rpg_quest_init(s_quests, RPG_QUEST_MAX_DAILY);
     rpg_streak_init(&s_streak);
+    rpg_pet_init(&s_pet);
+    s_pet_last_serial = 0;
 
     // Phase 4 开发模式日期。正式 RTC/SNTP 接入后替换 provider 即可。
     s_dev_date.year = 2026;
@@ -392,12 +458,31 @@ void demo_life_rpg_enter(void)
             ESP_LOGW(TAG, "streak load failed, using default streak: %s",
                      esp_err_to_name(storage_err));
         }
+
+        storage_err = rpg_storage_load_pet(&s_pet, &s_pet_last_serial);
+        if (storage_err != ESP_OK) {
+            ESP_LOGW(TAG, "pet load failed, using default pet: %s",
+                     esp_err_to_name(storage_err));
+        }
     } else {
         ESP_LOGW(TAG, "storage init failed, using defaults: %s",
                  esp_err_to_name(storage_err));
     }
 
     rpg_streak_refresh(&s_streak, &today);
+
+    uint32_t today_serial = rpg_date_to_serial(&today);
+    if (s_pet_last_serial == 0) {
+        s_pet_last_serial = today_serial;
+    } else if (today_serial > s_pet_last_serial) {
+        uint32_t missed = today_serial - s_pet_last_serial;
+        if (missed > 10) {
+            missed = 10;
+        }
+        rpg_pet_decay(&s_pet, (uint8_t)(missed * 5), (uint8_t)(missed * 10));
+        s_pet_last_serial = today_serial;
+        rpg_storage_save_pet(&s_pet, s_pet_last_serial);
+    }
 
     s_view = LIFE_VIEW_HOME;
     s_home_sel = 0;
@@ -412,13 +497,15 @@ void demo_life_rpg_exit(void)
     rpg_storage_save_player(&s_player);
     rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
     rpg_storage_save_streak(&s_streak);
+    rpg_storage_save_pet(&s_pet, s_pet_last_serial);
     clear_screen();
 }
 
 void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
     if (ev == BSP_BTN_DOUBLE) {
-        if (s_view == LIFE_VIEW_PLAYER || s_view == LIFE_VIEW_QUEST_LIST) {
+        if (s_view == LIFE_VIEW_PLAYER || s_view == LIFE_VIEW_QUEST_LIST ||
+            s_view == LIFE_VIEW_PET) {
             s_view = LIFE_VIEW_HOME;
             build_home();
         } else if (s_view == LIFE_VIEW_QUEST_DETAIL) {
@@ -432,17 +519,20 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
     case LIFE_VIEW_HOME:
         if (ev != BSP_BTN_CLICK) return;
         if (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN) {
-            s_home_sel = (s_home_sel + 1) % 2;
+            s_home_sel = (s_home_sel + 1) % 3;
             refresh_home();
             life_rpg_jump_mascot();
         } else if (btn == BSP_BTN_OK) {
             if (s_home_sel == 0) {
                 s_view = LIFE_VIEW_PLAYER;
                 build_player();
-            } else {
+            } else if (s_home_sel == 1) {
                 s_view = LIFE_VIEW_QUEST_LIST;
                 s_quest_sel = 0;
                 build_quest_list();
+            } else {
+                s_view = LIFE_VIEW_PET;
+                build_pet();
             }
         }
         break;
@@ -461,6 +551,15 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
             rpg_quest_generate_daily(s_quests, RPG_QUEST_MAX_DAILY, &today);
             rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
             rpg_storage_save_streak(&s_streak);
+
+            uint32_t today_serial = rpg_date_to_serial(&today);
+            if (today_serial > s_pet_last_serial) {
+                uint32_t missed = today_serial - s_pet_last_serial;
+                if (missed > 10) missed = 10;
+                rpg_pet_decay(&s_pet, (uint8_t)(missed * 5), (uint8_t)(missed * 10));
+                s_pet_last_serial = today_serial;
+                rpg_storage_save_pet(&s_pet, s_pet_last_serial);
+            }
             refresh_player();
             life_rpg_jump_mascot();
         }
@@ -488,15 +587,24 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
                 rpg_date_t today;
                 rpg_date_today(&today);
                 rpg_streak_on_quest_complete(&s_streak, &today);
+                rpg_pet_on_quest_complete(&s_pet);
+                s_pet_last_serial = rpg_date_to_serial(&today);
                 rpg_storage_save_player(&s_player);
                 rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
                 rpg_storage_save_streak(&s_streak);
+                rpg_storage_save_pet(&s_pet, s_pet_last_serial);
                 if (s_quest_status) {
                     lv_label_set_text_fmt(s_quest_status, "QUEST COMPLETE +%u XP",
                                           (unsigned)awarded);
                 }
                 play_completion_feedback();
             }
+            life_rpg_jump_mascot();
+        }
+        break;
+
+    case LIFE_VIEW_PET:
+        if (btn != BSP_BTN_OK && ev == BSP_BTN_PRESS) {
             life_rpg_jump_mascot();
         }
         break;

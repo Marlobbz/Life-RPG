@@ -257,6 +257,72 @@ esp_err_t rpg_storage_save_streak(const rpg_streak_t *streak)
     return err;
 }
 
+esp_err_t rpg_storage_load_pet(rpg_pet_t *pet, uint32_t *last_serial)
+{
+    if (!pet || !last_serial) return ESP_ERR_INVALID_ARG;
+
+    rpg_pet_init(pet);
+    *last_serial = 0;
+
+    esp_err_t err = rpg_storage_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    nvs_handle_t handle;
+    err = nvs_open(RPG_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return ESP_ERR_NVS_NOT_FOUND;
+    }
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    uint8_t value_u8 = 0;
+    if (nvs_get_u8(handle, "pet_mood", &value_u8) == ESP_OK) {
+        pet->mood = value_u8;
+    }
+    if (nvs_get_u8(handle, "pet_energy", &value_u8) == ESP_OK) {
+        pet->energy = value_u8;
+    }
+    if (nvs_get_u8(handle, "pet_trust", &value_u8) == ESP_OK) {
+        pet->trust = value_u8;
+    }
+
+    uint32_t value_u32 = 0;
+    if (nvs_get_u32(handle, "pet_last", &value_u32) == ESP_OK) {
+        *last_serial = value_u32;
+    }
+
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+esp_err_t rpg_storage_save_pet(const rpg_pet_t *pet, uint32_t last_serial)
+{
+    if (!pet) return ESP_ERR_INVALID_ARG;
+
+    esp_err_t err = rpg_storage_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    nvs_handle_t handle;
+    err = nvs_open(RPG_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    err = nvs_set_u8(handle, "pet_mood", pet->mood);
+    if (err == ESP_OK) err = nvs_set_u8(handle, "pet_energy", pet->energy);
+    if (err == ESP_OK) err = nvs_set_u8(handle, "pet_trust", pet->trust);
+    if (err == ESP_OK) err = nvs_set_u32(handle, "pet_last", last_serial);
+    if (err == ESP_OK) err = nvs_commit(handle);
+
+    nvs_close(handle);
+    return err;
+}
+
 esp_err_t rpg_storage_reset(void)
 {
     esp_err_t err = rpg_storage_init();
