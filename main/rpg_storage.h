@@ -18,10 +18,12 @@ esp_err_t rpg_storage_load_player(rpg_player_t *player);
 esp_err_t rpg_storage_save_player(const rpg_player_t *player);
 
 // 载入今日任务的完成状态。任务模板由 rpg_quest 模块生成,这里只覆盖完成位。
-esp_err_t rpg_storage_load_quests(rpg_quest_t *quests, uint32_t count);
+esp_err_t rpg_storage_load_quests(rpg_quest_t *quests, uint32_t count,
+                                  const rpg_date_t *today);
 
 // 保存今日任务的完成状态。
-esp_err_t rpg_storage_save_quests(const rpg_quest_t *quests, uint32_t count);
+esp_err_t rpg_storage_save_quests(const rpg_quest_t *quests, uint32_t count,
+                                  const rpg_date_t *today);
 
 // 载入连续天数状态。
 esp_err_t rpg_storage_load_streak(rpg_streak_t *streak);

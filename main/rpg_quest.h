@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rpg_player.h"
+#include "rpg_date.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -24,9 +25,9 @@ typedef struct {
 // 把任务数组清空为未完成状态。
 void rpg_quest_init(rpg_quest_t *quests, uint32_t count);
 
-// 生成今天的固定任务。Phase 3 固定取模板前三项;
-// Phase 4 引入日期后会改为按天轮换。
-void rpg_quest_generate_daily(rpg_quest_t *quests, uint32_t count);
+// 根据日期生成当天任务。每天从模板池连续取三项,并按日期轮换。
+void rpg_quest_generate_daily(rpg_quest_t *quests, uint32_t count,
+                              const rpg_date_t *date);
 
 // 完成任务。已经完成或参数无效时返回 0,不重复发放 XP。
 // 成功时返回本次奖励的 XP 数值。

@@ -258,22 +258,22 @@ static void build_player(void)
     s_scr = ui_pixel_screen_create("PLAYER");
     add_battery(s_scr);
 
-    lv_obj_t *panel = ui_pixel_panel_create(s_scr, 20, 78, 200, 145, UI_PAPER);
+    lv_obj_t *panel = ui_pixel_panel_create(s_scr, 12, 58, 216, 172, UI_PAPER);
 
     s_level = lv_label_create(panel);
     lv_obj_set_style_text_font(s_level, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(s_level, lv_color_hex(UI_INK), 0);
-    lv_obj_align(s_level, LV_ALIGN_TOP_MID, 0, 8);
+    lv_obj_align(s_level, LV_ALIGN_TOP_MID, 0, 6);
 
     s_xp = lv_label_create(panel);
     lv_obj_set_style_text_font(s_xp, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_xp, lv_color_hex(UI_SKY_DARK), 0);
-    lv_obj_align(s_xp, LV_ALIGN_TOP_MID, 0, 34);
+    lv_obj_align(s_xp, LV_ALIGN_TOP_MID, 0, 32);
 
     s_streak_label = lv_label_create(panel);
     lv_obj_set_style_text_font(s_streak_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_streak_label, lv_color_hex(UI_RED), 0);
-    lv_obj_align(s_streak_label, LV_ALIGN_TOP_MID, 0, 58);
+    lv_obj_align(s_streak_label, LV_ALIGN_TOP_MID, 0, 56);
 
     s_stats = lv_label_create(panel);
     lv_obj_set_style_text_font(s_stats, &lv_font_montserrat_14, 0);
@@ -284,7 +284,7 @@ static void build_player(void)
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(UI_SKY_DARK), 0);
     lv_label_set_text(hint, "UP/DOWN: DATE  DBL: BACK");
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -6);
 
     s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
     s_mascot_base_y = 238;
@@ -361,7 +361,6 @@ void demo_life_rpg_enter(void)
 {
     rpg_player_init(&s_player);
     rpg_quest_init(s_quests, RPG_QUEST_MAX_DAILY);
-    rpg_quest_generate_daily(s_quests, RPG_QUEST_MAX_DAILY);
     rpg_streak_init(&s_streak);
 
     // Phase 4 开发模式日期。正式 RTC/SNTP 接入后替换 provider 即可。
@@ -369,6 +368,10 @@ void demo_life_rpg_enter(void)
     s_dev_date.month = 9;
     s_dev_date.day = 10;
     rpg_date_set_provider(life_rpg_date_provider);
+
+    rpg_date_t today;
+    rpg_date_today(&today);
+    rpg_quest_generate_daily(s_quests, RPG_QUEST_MAX_DAILY, &today);
 
     esp_err_t storage_err = rpg_storage_init();
     if (storage_err == ESP_OK) {
@@ -378,7 +381,7 @@ void demo_life_rpg_enter(void)
                      esp_err_to_name(storage_err));
         }
 
-        storage_err = rpg_storage_load_quests(s_quests, RPG_QUEST_MAX_DAILY);
+        storage_err = rpg_storage_load_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
         if (storage_err != ESP_OK) {
             ESP_LOGW(TAG, "quest load failed, using generated quests: %s",
                      esp_err_to_name(storage_err));
@@ -394,8 +397,6 @@ void demo_life_rpg_enter(void)
                  esp_err_to_name(storage_err));
     }
 
-    rpg_date_t today;
-    rpg_date_today(&today);
     rpg_streak_refresh(&s_streak, &today);
 
     s_view = LIFE_VIEW_HOME;
@@ -406,8 +407,10 @@ void demo_life_rpg_enter(void)
 
 void demo_life_rpg_exit(void)
 {
+    rpg_date_t today;
+    rpg_date_today(&today);
     rpg_storage_save_player(&s_player);
-    rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
+    rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
     rpg_storage_save_streak(&s_streak);
     clear_screen();
 }
@@ -455,6 +458,8 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
             rpg_date_t today;
             rpg_date_today(&today);
             rpg_streak_refresh(&s_streak, &today);
+            rpg_quest_generate_daily(s_quests, RPG_QUEST_MAX_DAILY, &today);
+            rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
             rpg_storage_save_streak(&s_streak);
             refresh_player();
             life_rpg_jump_mascot();
@@ -484,7 +489,7 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
                 rpg_date_today(&today);
                 rpg_streak_on_quest_complete(&s_streak, &today);
                 rpg_storage_save_player(&s_player);
-                rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
+                rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
                 rpg_storage_save_streak(&s_streak);
                 if (s_quest_status) {
                     lv_label_set_text_fmt(s_quest_status, "QUEST COMPLETE +%u XP",

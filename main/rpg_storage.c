@@ -108,9 +108,10 @@ esp_err_t rpg_storage_save_player(const rpg_player_t *player)
     return err;
 }
 
-esp_err_t rpg_storage_load_quests(rpg_quest_t *quests, uint32_t count)
+esp_err_t rpg_storage_load_quests(rpg_quest_t *quests, uint32_t count,
+                                  const rpg_date_t *today)
 {
-    if (!quests) return ESP_ERR_INVALID_ARG;
+    if (!quests || !today) return ESP_ERR_INVALID_ARG;
     if (count > RPG_QUEST_MAX_DAILY) {
         count = RPG_QUEST_MAX_DAILY;
     }
@@ -130,8 +131,11 @@ esp_err_t rpg_storage_load_quests(rpg_quest_t *quests, uint32_t count)
     }
 
     uint32_t quest_version = 0;
+    uint32_t quest_day = 0;
     if (nvs_get_u32(handle, "q_ver", &quest_version) != ESP_OK ||
-        quest_version != RPG_QUEST_VERSION) {
+        quest_version != RPG_QUEST_VERSION ||
+        nvs_get_u32(handle, "q_day", &quest_day) != ESP_OK ||
+        quest_day != rpg_date_to_serial(today)) {
         nvs_close(handle);
         return ESP_ERR_NVS_NOT_FOUND;
     }
@@ -150,9 +154,10 @@ esp_err_t rpg_storage_load_quests(rpg_quest_t *quests, uint32_t count)
     return ESP_OK;
 }
 
-esp_err_t rpg_storage_save_quests(const rpg_quest_t *quests, uint32_t count)
+esp_err_t rpg_storage_save_quests(const rpg_quest_t *quests, uint32_t count,
+                                  const rpg_date_t *today)
 {
-    if (!quests) return ESP_ERR_INVALID_ARG;
+    if (!quests || !today) return ESP_ERR_INVALID_ARG;
     if (count > RPG_QUEST_MAX_DAILY) {
         count = RPG_QUEST_MAX_DAILY;
     }
@@ -169,6 +174,9 @@ esp_err_t rpg_storage_save_quests(const rpg_quest_t *quests, uint32_t count)
     }
 
     err = nvs_set_u32(handle, "q_ver", RPG_QUEST_VERSION);
+    if (err == ESP_OK) {
+        err = nvs_set_u32(handle, "q_day", rpg_date_to_serial(today));
+    }
     if (err != ESP_OK) {
         nvs_close(handle);
         return err;

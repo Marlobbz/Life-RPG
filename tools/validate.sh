@@ -33,7 +33,7 @@ run_static_checks() {
         -o "${test_dir}/test_rpg_player"
     "${test_dir}/test_rpg_player"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
-        tests/test_rpg_quest.c main/rpg_quest.c main/rpg_player.c \
+        tests/test_rpg_quest.c main/rpg_quest.c main/rpg_player.c main/rpg_date.c \
         -o "${test_dir}/test_rpg_quest"
     "${test_dir}/test_rpg_quest"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \

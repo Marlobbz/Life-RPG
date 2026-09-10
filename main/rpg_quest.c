@@ -74,15 +74,17 @@ void rpg_quest_init(rpg_quest_t *quests, uint32_t count)
     }
 }
 
-void rpg_quest_generate_daily(rpg_quest_t *quests, uint32_t count)
+void rpg_quest_generate_daily(rpg_quest_t *quests, uint32_t count,
+                              const rpg_date_t *date)
 {
-    if (!quests) return;
+    if (!quests || !date) return;
     if (count > RPG_QUEST_MAX_DAILY) {
         count = RPG_QUEST_MAX_DAILY;
     }
 
-    for (uint32_t i = 0; i < count && i < TEMPLATE_COUNT; i++) {
-        quests[i] = TEMPLATES[i];
+    uint32_t start = rpg_date_to_serial(date) % TEMPLATE_COUNT;
+    for (uint32_t i = 0; i < count; i++) {
+        quests[i] = TEMPLATES[(start + i) % TEMPLATE_COUNT];
     }
 }
 
