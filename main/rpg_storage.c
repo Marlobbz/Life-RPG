@@ -191,6 +191,64 @@ esp_err_t rpg_storage_save_quests(const rpg_quest_t *quests, uint32_t count)
     return err;
 }
 
+esp_err_t rpg_storage_load_streak(rpg_streak_t *streak)
+{
+    if (!streak) return ESP_ERR_INVALID_ARG;
+
+    rpg_streak_init(streak);
+    esp_err_t err = rpg_storage_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    nvs_handle_t handle;
+    err = nvs_open(RPG_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return ESP_ERR_NVS_NOT_FOUND;
+    }
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    uint32_t value = 0;
+    if (nvs_get_u32(handle, "streak", &value) == ESP_OK) {
+        streak->current_streak = value;
+    }
+    if (nvs_get_u32(handle, "streak_last", &value) == ESP_OK) {
+        streak->last_serial = value;
+    }
+
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+esp_err_t rpg_storage_save_streak(const rpg_streak_t *streak)
+{
+    if (!streak) return ESP_ERR_INVALID_ARG;
+
+    esp_err_t err = rpg_storage_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    nvs_handle_t handle;
+    err = nvs_open(RPG_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    err = nvs_set_u32(handle, "streak", streak->current_streak);
+    if (err == ESP_OK) {
+        err = nvs_set_u32(handle, "streak_last", streak->last_serial);
+    }
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+
+    nvs_close(handle);
+    return err;
+}
+
 esp_err_t rpg_storage_reset(void)
 {
     esp_err_t err = rpg_storage_init();

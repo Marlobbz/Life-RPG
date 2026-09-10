@@ -13,6 +13,8 @@ idf_component_register(
          "demo_life_rpg.c"
          "rpg_player.c"
          "rpg_quest.c"
+         "rpg_date.c"
+         "rpg_streak.c"
          "rpg_storage.c"
     INCLUDE_DIRS "."
     REQUIRES bsp bt esp_event esp_hw_support esp_netif esp_timer esp_wifi nvs_flash

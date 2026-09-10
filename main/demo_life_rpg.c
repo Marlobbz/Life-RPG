@@ -11,6 +11,8 @@
 #include "bsp_battery.h"
 #include "rpg_player.h"
 #include "rpg_quest.h"
+#include "rpg_date.h"
+#include "rpg_streak.h"
 #include "rpg_storage.h"
 #include "ui_pixel.h"
 #include "esp_log.h"
@@ -31,6 +33,7 @@ static lv_obj_t *s_battery;
 static lv_obj_t *s_level;
 static lv_obj_t *s_xp;
 static lv_obj_t *s_stats;
+static lv_obj_t *s_streak_label;
 static lv_obj_t *s_home_cards[2];
 static lv_obj_t *s_quest_rows[RPG_QUEST_MAX_DAILY];
 static lv_obj_t *s_quest_row_labels[RPG_QUEST_MAX_DAILY];
@@ -42,10 +45,20 @@ static lv_obj_t *s_mascot;
 
 static rpg_player_t s_player;
 static rpg_quest_t s_quests[RPG_QUEST_MAX_DAILY];
+static rpg_streak_t s_streak;
+static rpg_date_t s_dev_date;
 static life_view_t s_view;
 static int s_home_sel;
 static int s_quest_sel;
 static int s_mascot_base_y;
+
+// 开发模式日期来源。后续接入 RTC/SNTP 时只替换 provider,业务代码不用改。
+static void life_rpg_date_provider(rpg_date_t *out)
+{
+    if (out) {
+        *out = s_dev_date;
+    }
+}
 
 static void refresh_battery(void)
 {
@@ -84,6 +97,7 @@ static void clear_screen(void)
     s_level = NULL;
     s_xp = NULL;
     s_stats = NULL;
+    s_streak_label = NULL;
     s_mascot = NULL;
     s_quest_title = NULL;
     s_quest_desc = NULL;
@@ -119,6 +133,15 @@ static void refresh_player(void)
                           (unsigned)s_player.stats[RPG_STAT_BODY],
                           (unsigned)s_player.stats[RPG_STAT_CODE],
                           (unsigned)s_player.stats[RPG_STAT_KNOWLEDGE]);
+
+    if (s_streak_label) {
+        rpg_date_t today;
+        rpg_date_today(&today);
+        bool done_today = rpg_streak_completed_today(&s_streak, &today);
+        lv_label_set_text_fmt(s_streak_label, "STREAK %u DAYS  %s",
+                              (unsigned)s_streak.current_streak,
+                              done_today ? "DONE" : "OPEN");
+    }
 }
 
 static void fx_fade(void *obj, int32_t value)
@@ -245,17 +268,22 @@ static void build_player(void)
     s_xp = lv_label_create(panel);
     lv_obj_set_style_text_font(s_xp, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_xp, lv_color_hex(UI_SKY_DARK), 0);
-    lv_obj_align(s_xp, LV_ALIGN_TOP_MID, 0, 38);
+    lv_obj_align(s_xp, LV_ALIGN_TOP_MID, 0, 34);
+
+    s_streak_label = lv_label_create(panel);
+    lv_obj_set_style_text_font(s_streak_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_streak_label, lv_color_hex(UI_RED), 0);
+    lv_obj_align(s_streak_label, LV_ALIGN_TOP_MID, 0, 58);
 
     s_stats = lv_label_create(panel);
     lv_obj_set_style_text_font(s_stats, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_stats, lv_color_hex(UI_INK), 0);
-    lv_obj_align(s_stats, LV_ALIGN_TOP_MID, 0, 64);
+    lv_obj_align(s_stats, LV_ALIGN_TOP_MID, 0, 82);
 
     lv_obj_t *hint = lv_label_create(panel);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(UI_SKY_DARK), 0);
-    lv_label_set_text(hint, "DBL: BACK");
+    lv_label_set_text(hint, "UP/DOWN: DATE  DBL: BACK");
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
 
     s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
@@ -334,6 +362,13 @@ void demo_life_rpg_enter(void)
     rpg_player_init(&s_player);
     rpg_quest_init(s_quests, RPG_QUEST_MAX_DAILY);
     rpg_quest_generate_daily(s_quests, RPG_QUEST_MAX_DAILY);
+    rpg_streak_init(&s_streak);
+
+    // Phase 4 开发模式日期。正式 RTC/SNTP 接入后替换 provider 即可。
+    s_dev_date.year = 2026;
+    s_dev_date.month = 9;
+    s_dev_date.day = 10;
+    rpg_date_set_provider(life_rpg_date_provider);
 
     esp_err_t storage_err = rpg_storage_init();
     if (storage_err == ESP_OK) {
@@ -348,10 +383,20 @@ void demo_life_rpg_enter(void)
             ESP_LOGW(TAG, "quest load failed, using generated quests: %s",
                      esp_err_to_name(storage_err));
         }
+
+        storage_err = rpg_storage_load_streak(&s_streak);
+        if (storage_err != ESP_OK) {
+            ESP_LOGW(TAG, "streak load failed, using default streak: %s",
+                     esp_err_to_name(storage_err));
+        }
     } else {
         ESP_LOGW(TAG, "storage init failed, using defaults: %s",
                  esp_err_to_name(storage_err));
     }
+
+    rpg_date_t today;
+    rpg_date_today(&today);
+    rpg_streak_refresh(&s_streak, &today);
 
     s_view = LIFE_VIEW_HOME;
     s_home_sel = 0;
@@ -363,6 +408,7 @@ void demo_life_rpg_exit(void)
 {
     rpg_storage_save_player(&s_player);
     rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
+    rpg_storage_save_streak(&s_streak);
     clear_screen();
 }
 
@@ -399,7 +445,18 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         break;
 
     case LIFE_VIEW_PLAYER:
-        if (btn != BSP_BTN_OK && ev == BSP_BTN_PRESS) {
+        if (ev == BSP_BTN_CLICK && (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN)) {
+            int delta = (btn == BSP_BTN_UP) ? 1 : -1;
+            int day = (int)s_dev_date.day + delta;
+            if (day < 1) day += 31;
+            if (day > 31) day -= 31;
+            s_dev_date.day = (uint8_t)day;
+
+            rpg_date_t today;
+            rpg_date_today(&today);
+            rpg_streak_refresh(&s_streak, &today);
+            rpg_storage_save_streak(&s_streak);
+            refresh_player();
             life_rpg_jump_mascot();
         }
         break;
@@ -423,8 +480,12 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         if (btn == BSP_BTN_OK) {
             uint32_t awarded = rpg_quest_complete(&s_quests[s_quest_sel], &s_player);
             if (awarded > 0) {
+                rpg_date_t today;
+                rpg_date_today(&today);
+                rpg_streak_on_quest_complete(&s_streak, &today);
                 rpg_storage_save_player(&s_player);
                 rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
+                rpg_storage_save_streak(&s_streak);
                 if (s_quest_status) {
                     lv_label_set_text_fmt(s_quest_status, "QUEST COMPLETE +%u XP",
                                           (unsigned)awarded);
