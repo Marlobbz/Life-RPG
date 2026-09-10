@@ -75,12 +75,6 @@ esp_err_t rpg_audio_start(void)
         return ESP_OK;
     }
 
-    esp_err_t err = bsp_audio_init();
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "audio init failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
     if (xTaskCreate(audio_task, "rpg_audio", 4096, NULL, 4, &s_task) != pdPASS) {
         ESP_LOGW(TAG, "audio task create failed");
         return ESP_FAIL;
