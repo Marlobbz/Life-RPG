@@ -207,7 +207,7 @@ static void play_completion_feedback(void)
 
 static void refresh_home(void)
 {
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
         if (s_home_cards[i]) {
             ui_pixel_set_selected(s_home_cards[i], i == s_home_sel, true);
         }
