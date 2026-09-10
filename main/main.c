@@ -39,6 +39,7 @@ static lv_obj_t *s_rows[DEMO_COUNT];
 static lv_obj_t *s_mascot;
 static int  s_sel;                 // 当前选中项
 static int  s_active = -1;         // 当前所在演示页;-1 = 在菜单
+static volatile bool s_retain_demo_pages;
 
 static void menu_refresh(void) {
     for (size_t i = 0; i < DEMO_COUNT; i++) {
@@ -73,6 +74,19 @@ static void menu_build(void) {
 static void enter_menu(void) {
     s_active = -1;
     menu_build();
+}
+
+// 直接启动 Life RPG 后,官方 demo 菜单不再被引用,链接器会裁剪它们。
+// 这里显式引用 DEMOS[],强制保留全部官方 demo 页面及其依赖。
+static void retain_demo_pages(void) {
+    // 正常情况下这个分支不会执行;它只是强制链接所有 demo 页面。
+    if (s_retain_demo_pages) {
+        for (size_t i = 0; i < DEMO_COUNT; i++) {
+            DEMOS[i].enter();
+            DEMOS[i].key(BSP_BTN_OK, BSP_BTN_PRESS);
+            DEMOS[i].exit();
+        }
+    }
 }
 
 // 按键回调运行在 button 组件的任务里,操作 LVGL 必须加锁。
@@ -116,6 +130,8 @@ void app_main(void) {
     s_ok[5] = true;
     s_ok[6] = true;
     s_ok[7] = true;
+
+    retain_demo_pages();
 
     if (bsp_lvgl_lock(1000)) { demo_life_rpg_enter(); bsp_lvgl_unlock(); }
 
