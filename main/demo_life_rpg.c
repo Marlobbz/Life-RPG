@@ -138,7 +138,7 @@ static void life_rpg_jump_mascot(void)
 static void load_screen(void)
 {
     if (!s_scr) return;
-    lv_scr_load_anim(s_scr, LV_SCR_LOAD_ANIM_FADE_ON, 180, 0, false);
+    lv_screen_load(s_scr);
 }
 
 static void refresh_player(void)
