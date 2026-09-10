@@ -32,6 +32,10 @@ run_static_checks() {
         tests/test_rpg_player.c main/rpg_player.c \
         -o "${test_dir}/test_rpg_player"
     "${test_dir}/test_rpg_player"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_rpg_quest.c main/rpg_quest.c main/rpg_player.c \
+        -o "${test_dir}/test_rpg_quest"
+    "${test_dir}/test_rpg_quest"
     python3 tests/test_verify_firmware.py
     rm -rf "${test_dir}"
     echo "Host tests: PASS"

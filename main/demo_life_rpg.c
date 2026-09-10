@@ -1,33 +1,52 @@
 // main/demo_life_rpg.c —— AI Passport Life RPG 页面入口。
 //
-// Phase 2 阶段负责接入 Player / XP / Level / Stats 和本地持久化。
-// 页面只做 UI 和按键分发;纯逻辑在 rpg_player.c,存储在 rpg_storage.c。
+// Phase 3 阶段在页面内加入一个很小的状态机:
+//   HOME -> PLAYER
+//   HOME -> QUEST LIST -> QUEST DETAIL
 //
-// 为了在没有 Quest 系统的阶段验证升级和保存,当前 OK 单击临时 +20 XP。
-// 该调试行为会在 Phase 3 由 Quest 完成奖励替换。
+// 纯逻辑分别放在 rpg_player.c / rpg_quest.c / rpg_storage.c,
+// 本文件只负责 LVGL 页面和按键分发。
 
 #include "demo.h"
 #include "bsp_battery.h"
 #include "rpg_player.h"
+#include "rpg_quest.h"
 #include "rpg_storage.h"
 #include "ui_pixel.h"
 #include "esp_log.h"
 #include "lvgl.h"
+#include <stdio.h>
 
 static const char *TAG = "life_rpg";
 
-#define RPG_PHASE2_DEBUG_XP 20u
+typedef enum {
+    LIFE_VIEW_HOME = 0,
+    LIFE_VIEW_PLAYER,
+    LIFE_VIEW_QUEST_LIST,
+    LIFE_VIEW_QUEST_DETAIL,
+} life_view_t;
 
 static lv_obj_t *s_scr;
 static lv_obj_t *s_battery;
 static lv_obj_t *s_level;
 static lv_obj_t *s_xp;
 static lv_obj_t *s_stats;
+static lv_obj_t *s_home_cards[2];
+static lv_obj_t *s_quest_rows[RPG_QUEST_MAX_DAILY];
+static lv_obj_t *s_quest_row_labels[RPG_QUEST_MAX_DAILY];
+static lv_obj_t *s_quest_title;
+static lv_obj_t *s_quest_desc;
+static lv_obj_t *s_quest_reward;
+static lv_obj_t *s_quest_status;
 static lv_obj_t *s_mascot;
+
 static rpg_player_t s_player;
+static rpg_quest_t s_quests[RPG_QUEST_MAX_DAILY];
+static life_view_t s_view;
+static int s_home_sel;
+static int s_quest_sel;
 static int s_mascot_base_y;
 
-// 右上角显示电量。官方基线约定 UI 默认显示电池,读不到时优雅降级为 "--"。
 static void refresh_battery(void)
 {
     if (!s_battery) return;
@@ -46,6 +65,48 @@ static void refresh_battery(void)
                                 0);
 }
 
+static void add_battery(lv_obj_t *parent)
+{
+    s_battery = lv_label_create(parent);
+    lv_obj_set_style_text_font(s_battery, &lv_font_montserrat_14, 0);
+    lv_obj_set_pos(s_battery, 174, 27);
+    refresh_battery();
+}
+
+static void clear_screen(void)
+{
+    if (s_scr) {
+        lv_obj_delete(s_scr);
+        s_scr = NULL;
+    }
+
+    s_battery = NULL;
+    s_level = NULL;
+    s_xp = NULL;
+    s_stats = NULL;
+    s_mascot = NULL;
+    s_quest_title = NULL;
+    s_quest_desc = NULL;
+    s_quest_reward = NULL;
+    s_quest_status = NULL;
+
+    for (int i = 0; i < 2; i++) {
+        s_home_cards[i] = NULL;
+    }
+    for (uint32_t i = 0; i < RPG_QUEST_MAX_DAILY; i++) {
+        s_quest_rows[i] = NULL;
+        s_quest_row_labels[i] = NULL;
+    }
+}
+
+static void life_rpg_jump_mascot(void)
+{
+    if (!s_mascot) return;
+
+    lv_obj_set_y(s_mascot, s_mascot_base_y);
+    ui_pixel_mascot_jump(s_mascot);
+}
+
 static void refresh_player(void)
 {
     if (!s_level || !s_xp || !s_stats) return;
@@ -61,39 +122,81 @@ static void refresh_player(void)
                           (unsigned)s_player.stats[RPG_STAT_WIS]);
 }
 
-// 官方 ui_pixel_mascot_jump() 会从当前 y 再向上跳,连续触发会累积漂移。
-// Life RPG 页面先把它放回基准位置再跳,保证每次都在同一高度反馈。
-static void life_rpg_jump_mascot(void)
+static void refresh_home(void)
 {
-    if (!s_mascot) return;
-
-    lv_obj_set_y(s_mascot, s_mascot_base_y);
-    ui_pixel_mascot_jump(s_mascot);
-}
-
-void demo_life_rpg_enter(void)
-{
-    rpg_player_init(&s_player);
-
-    esp_err_t storage_err = rpg_storage_init();
-    if (storage_err != ESP_OK) {
-        ESP_LOGW(TAG, "storage init failed, using default player: %s",
-                 esp_err_to_name(storage_err));
-    } else {
-        storage_err = rpg_storage_load_player(&s_player);
-        if (storage_err != ESP_OK) {
-            ESP_LOGW(TAG, "player load failed, using default player: %s",
-                     esp_err_to_name(storage_err));
+    for (int i = 0; i < 2; i++) {
+        if (s_home_cards[i]) {
+            ui_pixel_set_selected(s_home_cards[i], i == s_home_sel, true);
         }
     }
+}
+
+static void refresh_quest_list(void)
+{
+    for (uint32_t i = 0; i < RPG_QUEST_MAX_DAILY; i++) {
+        if (!s_quest_rows[i] || !s_quest_row_labels[i]) continue;
+
+        char line[RPG_QUEST_TITLE_MAX + 8];
+        snprintf(line, sizeof(line), "[%c] %s",
+                 s_quests[i].completed ? 'X' : ' ',
+                 s_quests[i].title);
+        lv_label_set_text(s_quest_row_labels[i], line);
+        ui_pixel_set_selected(s_quest_rows[i], (int)i == s_quest_sel, true);
+    }
+}
+
+static void refresh_quest_detail(void)
+{
+    if (!s_quest_title || !s_quest_desc || !s_quest_reward || !s_quest_status) {
+        return;
+    }
+
+    lv_label_set_text(s_quest_title, s_quests[s_quest_sel].title);
+    lv_label_set_text(s_quest_desc, s_quests[s_quest_sel].description);
+    lv_label_set_text_fmt(s_quest_reward, "+%u XP",
+                          (unsigned)s_quests[s_quest_sel].xp_reward);
+    lv_label_set_text(s_quest_status,
+                      s_quests[s_quest_sel].completed ? "COMPLETE"
+                                                      : "NOT COMPLETE");
+}
+
+static void build_home(void)
+{
+    clear_screen();
 
     s_scr = ui_pixel_screen_create("LIFE RPG");
+    add_battery(s_scr);
 
-    // 电量放在蓝天区域,避开右上角已有的白云装饰。
-    s_battery = lv_label_create(s_scr);
-    lv_obj_set_style_text_font(s_battery, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(s_battery, 174, 27);
-    refresh_battery();
+    static const char *HOME_NAMES[] = { "PLAYER", "QUEST" };
+    for (int i = 0; i < 2; i++) {
+        int y = 82 + i * 52;
+        s_home_cards[i] = ui_pixel_panel_create(s_scr, 25, y, 190, 44, UI_PAPER);
+
+        lv_obj_t *label = lv_label_create(s_home_cards[i]);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(label, lv_color_hex(UI_INK), 0);
+        lv_label_set_text(label, HOME_NAMES[i]);
+        lv_obj_center(label);
+    }
+
+    lv_obj_t *hint = lv_label_create(s_scr);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(UI_INK), 0);
+    lv_label_set_text(hint, "UP/DOWN SELECT  OK ENTER");
+    lv_obj_set_pos(hint, 20, 202);
+
+    s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
+    s_mascot_base_y = 238;
+    refresh_home();
+    lv_screen_load(s_scr);
+}
+
+static void build_player(void)
+{
+    clear_screen();
+
+    s_scr = ui_pixel_screen_create("PLAYER");
+    add_battery(s_scr);
 
     lv_obj_t *panel = ui_pixel_panel_create(s_scr, 20, 78, 200, 145, UI_PAPER);
 
@@ -115,7 +218,7 @@ void demo_life_rpg_enter(void)
     lv_obj_t *hint = lv_label_create(panel);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(UI_SKY_DARK), 0);
-    lv_label_set_text(hint, "OK: +20 XP");
+    lv_label_set_text(hint, "DBL: BACK");
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
 
     s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
@@ -124,34 +227,174 @@ void demo_life_rpg_enter(void)
     lv_screen_load(s_scr);
 }
 
+static void build_quest_list(void)
+{
+    clear_screen();
+
+    s_scr = ui_pixel_screen_create("QUESTS");
+    add_battery(s_scr);
+
+    lv_obj_t *panel = ui_pixel_panel_create(s_scr, 16, 66, 208, 158, UI_PAPER);
+
+    for (uint32_t i = 0; i < RPG_QUEST_MAX_DAILY; i++) {
+        int y = 8 + (int)i * 50;
+        s_quest_rows[i] = ui_pixel_panel_create(panel, 8, y, 176, 42, UI_PAPER);
+        s_quest_row_labels[i] = lv_label_create(s_quest_rows[i]);
+        lv_obj_set_style_text_font(s_quest_row_labels[i], &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(s_quest_row_labels[i], lv_color_hex(UI_INK), 0);
+        lv_obj_center(s_quest_row_labels[i]);
+    }
+
+    lv_obj_t *hint = lv_label_create(s_scr);
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(UI_INK), 0);
+    lv_label_set_text(hint, "UP/DOWN SELECT  OK DETAIL  DBL BACK");
+    lv_obj_set_pos(hint, 16, 236);
+
+    refresh_quest_list();
+    lv_screen_load(s_scr);
+}
+
+static void build_quest_detail(void)
+{
+    clear_screen();
+
+    s_scr = ui_pixel_screen_create("QUEST");
+    add_battery(s_scr);
+
+    lv_obj_t *panel = ui_pixel_panel_create(s_scr, 16, 66, 208, 158, UI_PAPER);
+
+    s_quest_title = lv_label_create(panel);
+    lv_obj_set_style_text_font(s_quest_title, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(s_quest_title, lv_color_hex(UI_INK), 0);
+    lv_obj_align(s_quest_title, LV_ALIGN_TOP_MID, 0, 8);
+
+    s_quest_desc = lv_label_create(panel);
+    lv_obj_set_style_text_font(s_quest_desc, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_quest_desc, lv_color_hex(UI_SKY_DARK), 0);
+    lv_obj_set_width(s_quest_desc, 176);
+    lv_label_set_long_mode(s_quest_desc, LV_LABEL_LONG_WRAP);
+    lv_obj_align(s_quest_desc, LV_ALIGN_TOP_MID, 0, 40);
+
+    s_quest_reward = lv_label_create(panel);
+    lv_obj_set_style_text_font(s_quest_reward, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_quest_reward, lv_color_hex(UI_GRASS_DARK), 0);
+    lv_obj_align(s_quest_reward, LV_ALIGN_TOP_MID, 0, 82);
+
+    s_quest_status = lv_label_create(panel);
+    lv_obj_set_style_text_font(s_quest_status, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_quest_status, lv_color_hex(UI_INK), 0);
+    lv_obj_align(s_quest_status, LV_ALIGN_BOTTOM_MID, 0, -8);
+
+    s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
+    s_mascot_base_y = 238;
+    refresh_quest_detail();
+    lv_screen_load(s_scr);
+}
+
+void demo_life_rpg_enter(void)
+{
+    rpg_player_init(&s_player);
+    rpg_quest_init(s_quests, RPG_QUEST_MAX_DAILY);
+    rpg_quest_generate_daily(s_quests, RPG_QUEST_MAX_DAILY);
+
+    esp_err_t storage_err = rpg_storage_init();
+    if (storage_err == ESP_OK) {
+        storage_err = rpg_storage_load_player(&s_player);
+        if (storage_err != ESP_OK) {
+            ESP_LOGW(TAG, "player load failed, using default player: %s",
+                     esp_err_to_name(storage_err));
+        }
+
+        storage_err = rpg_storage_load_quests(s_quests, RPG_QUEST_MAX_DAILY);
+        if (storage_err != ESP_OK) {
+            ESP_LOGW(TAG, "quest load failed, using generated quests: %s",
+                     esp_err_to_name(storage_err));
+        }
+    } else {
+        ESP_LOGW(TAG, "storage init failed, using defaults: %s",
+                 esp_err_to_name(storage_err));
+    }
+
+    s_view = LIFE_VIEW_HOME;
+    s_home_sel = 0;
+    s_quest_sel = 0;
+    build_home();
+}
+
 void demo_life_rpg_exit(void)
 {
     rpg_storage_save_player(&s_player);
-
-    if (s_scr) {
-        lv_obj_delete(s_scr);
-        s_scr = NULL;
-        s_battery = NULL;
-        s_level = NULL;
-        s_xp = NULL;
-        s_stats = NULL;
-        s_mascot = NULL;
-    }
+    rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
+    clear_screen();
 }
 
 void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    if (btn == BSP_BTN_OK && ev == BSP_BTN_CLICK) {
-        uint32_t levels_gained = rpg_player_add_xp(&s_player, RPG_PHASE2_DEBUG_XP);
-        if (levels_gained > 0) {
-            rpg_storage_save_player(&s_player);
+    if (ev == BSP_BTN_DOUBLE) {
+        if (s_view == LIFE_VIEW_PLAYER || s_view == LIFE_VIEW_QUEST_LIST) {
+            s_view = LIFE_VIEW_HOME;
+            build_home();
+        } else if (s_view == LIFE_VIEW_QUEST_DETAIL) {
+            s_view = LIFE_VIEW_QUEST_LIST;
+            build_quest_list();
         }
-        refresh_player();
-        life_rpg_jump_mascot();
         return;
     }
 
-    if (btn != BSP_BTN_OK && ev == BSP_BTN_PRESS) {
-        life_rpg_jump_mascot();
+    switch (s_view) {
+    case LIFE_VIEW_HOME:
+        if (ev != BSP_BTN_CLICK) return;
+        if (btn == BSP_BTN_UP || btn == BSP_BTN_DOWN) {
+            s_home_sel = (s_home_sel + 1) % 2;
+            refresh_home();
+            life_rpg_jump_mascot();
+        } else if (btn == BSP_BTN_OK) {
+            if (s_home_sel == 0) {
+                s_view = LIFE_VIEW_PLAYER;
+                build_player();
+            } else {
+                s_view = LIFE_VIEW_QUEST_LIST;
+                s_quest_sel = 0;
+                build_quest_list();
+            }
+        }
+        break;
+
+    case LIFE_VIEW_PLAYER:
+        if (btn != BSP_BTN_OK && ev == BSP_BTN_PRESS) {
+            life_rpg_jump_mascot();
+        }
+        break;
+
+    case LIFE_VIEW_QUEST_LIST:
+        if (ev != BSP_BTN_CLICK) return;
+        if (btn == BSP_BTN_UP) {
+            s_quest_sel = (s_quest_sel + RPG_QUEST_MAX_DAILY - 1) % RPG_QUEST_MAX_DAILY;
+            refresh_quest_list();
+        } else if (btn == BSP_BTN_DOWN) {
+            s_quest_sel = (s_quest_sel + 1) % RPG_QUEST_MAX_DAILY;
+            refresh_quest_list();
+        } else if (btn == BSP_BTN_OK) {
+            s_view = LIFE_VIEW_QUEST_DETAIL;
+            build_quest_detail();
+        }
+        break;
+
+    case LIFE_VIEW_QUEST_DETAIL:
+        if (ev != BSP_BTN_CLICK) return;
+        if (btn == BSP_BTN_OK) {
+            uint32_t awarded = rpg_quest_complete(&s_quests[s_quest_sel], &s_player);
+            if (awarded > 0) {
+                rpg_storage_save_player(&s_player);
+                rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
+                if (s_quest_status) {
+                    lv_label_set_text_fmt(s_quest_status, "QUEST COMPLETE +%u XP",
+                                          (unsigned)awarded);
+                }
+            }
+            life_rpg_jump_mascot();
+        }
+        break;
     }
 }

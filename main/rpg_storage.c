@@ -108,6 +108,76 @@ esp_err_t rpg_storage_save_player(const rpg_player_t *player)
     return err;
 }
 
+esp_err_t rpg_storage_load_quests(rpg_quest_t *quests, uint32_t count)
+{
+    if (!quests) return ESP_ERR_INVALID_ARG;
+    if (count > RPG_QUEST_MAX_DAILY) {
+        count = RPG_QUEST_MAX_DAILY;
+    }
+
+    esp_err_t err = rpg_storage_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    nvs_handle_t handle;
+    err = nvs_open(RPG_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return ESP_ERR_NVS_NOT_FOUND;
+    }
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    for (uint32_t i = 0; i < count; i++) {
+        char key[17];
+        snprintf(key, sizeof(key), "q_done%u", (unsigned)i);
+
+        uint8_t done = 0;
+        if (nvs_get_u8(handle, key, &done) == ESP_OK) {
+            quests[i].completed = (done != 0);
+        }
+    }
+
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+esp_err_t rpg_storage_save_quests(const rpg_quest_t *quests, uint32_t count)
+{
+    if (!quests) return ESP_ERR_INVALID_ARG;
+    if (count > RPG_QUEST_MAX_DAILY) {
+        count = RPG_QUEST_MAX_DAILY;
+    }
+
+    esp_err_t err = rpg_storage_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    nvs_handle_t handle;
+    err = nvs_open(RPG_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    for (uint32_t i = 0; i < count; i++) {
+        char key[17];
+        snprintf(key, sizeof(key), "q_done%u", (unsigned)i);
+        err = nvs_set_u8(handle, key, quests[i].completed ? 1 : 0);
+        if (err != ESP_OK) {
+            break;
+        }
+    }
+
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+
+    nvs_close(handle);
+    return err;
+}
+
 esp_err_t rpg_storage_reset(void)
 {
     esp_err_t err = rpg_storage_init();
