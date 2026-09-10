@@ -5,11 +5,9 @@ int main(void)
 {
     rpg_player_t player;
     rpg_quest_t quests[RPG_QUEST_MAX_DAILY];
-    rpg_date_t date = { 1970, 1, 1 };
-
     rpg_player_init(&player);
     rpg_quest_init(quests, RPG_QUEST_MAX_DAILY);
-    rpg_quest_generate_daily(quests, RPG_QUEST_MAX_DAILY, &date);
+    rpg_quest_generate_catalog(quests, RPG_QUEST_MAX_DAILY);
 
     assert(quests[0].xp_reward == 20);
     assert(quests[0].completed == false);

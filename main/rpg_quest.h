@@ -4,14 +4,13 @@
 #pragma once
 
 #include "rpg_player.h"
-#include "rpg_date.h"
 #include <stdbool.h>
 #include <stdint.h>
 
-#define RPG_QUEST_MAX_DAILY  3u
+#define RPG_QUEST_MAX_DAILY  7u
 #define RPG_QUEST_TITLE_MAX  24u
 #define RPG_QUEST_DESC_MAX   64u
-#define RPG_QUEST_VERSION    2u
+#define RPG_QUEST_VERSION    3u
 
 typedef struct {
     char title[RPG_QUEST_TITLE_MAX];
@@ -25,9 +24,8 @@ typedef struct {
 // 把任务数组清空为未完成状态。
 void rpg_quest_init(rpg_quest_t *quests, uint32_t count);
 
-// 根据日期生成当天任务。每天从模板池连续取三项,并按日期轮换。
-void rpg_quest_generate_daily(rpg_quest_t *quests, uint32_t count,
-                              const rpg_date_t *date);
+// 生成固定任务列表。任务不会再按日期消失或轮换。
+void rpg_quest_generate_catalog(rpg_quest_t *quests, uint32_t count);
 
 // 完成任务。已经完成或参数无效时返回 0,不重复发放 XP。
 // 成功时返回本次奖励的 XP 数值。

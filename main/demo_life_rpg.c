@@ -216,15 +216,24 @@ static void refresh_home(void)
 
 static void refresh_quest_list(void)
 {
+    int top = s_quest_sel - 1;
+    if (top < 0) top = 0;
+    int max_top = (int)RPG_QUEST_MAX_DAILY - 3;
+    if (top > max_top) top = max_top;
+
     for (uint32_t i = 0; i < RPG_QUEST_MAX_DAILY; i++) {
+        if (i >= 3) break;
         if (!s_quest_rows[i] || !s_quest_row_labels[i]) continue;
+
+        uint32_t quest_index = (uint32_t)(top + (int)i);
+        if (quest_index >= RPG_QUEST_MAX_DAILY) continue;
 
         char line[RPG_QUEST_TITLE_MAX + 8];
         snprintf(line, sizeof(line), "[%c] %s",
-                 s_quests[i].completed ? 'X' : ' ',
-                 s_quests[i].title);
+                 s_quests[quest_index].completed ? 'X' : ' ',
+                 s_quests[quest_index].title);
         lv_label_set_text(s_quest_row_labels[i], line);
-        ui_pixel_set_selected(s_quest_rows[i], (int)i == s_quest_sel, true);
+        ui_pixel_set_selected(s_quest_rows[i], (int)quest_index == s_quest_sel, true);
     }
 }
 
@@ -437,7 +446,7 @@ void demo_life_rpg_enter(void)
 
     rpg_date_t today;
     rpg_date_today(&today);
-    rpg_quest_generate_daily(s_quests, RPG_QUEST_MAX_DAILY, &today);
+    rpg_quest_generate_catalog(s_quests, RPG_QUEST_MAX_DAILY);
 
     esp_err_t storage_err = rpg_storage_init();
     if (storage_err == ESP_OK) {
@@ -447,7 +456,7 @@ void demo_life_rpg_enter(void)
                      esp_err_to_name(storage_err));
         }
 
-        storage_err = rpg_storage_load_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
+        storage_err = rpg_storage_load_quests(s_quests, RPG_QUEST_MAX_DAILY);
         if (storage_err != ESP_OK) {
             ESP_LOGW(TAG, "quest load failed, using generated quests: %s",
                      esp_err_to_name(storage_err));
@@ -495,7 +504,7 @@ void demo_life_rpg_exit(void)
     rpg_date_t today;
     rpg_date_today(&today);
     rpg_storage_save_player(&s_player);
-    rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
+    rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
     rpg_storage_save_streak(&s_streak);
     rpg_storage_save_pet(&s_pet, s_pet_last_serial);
     clear_screen();
@@ -548,8 +557,8 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
             rpg_date_t today;
             rpg_date_today(&today);
             rpg_streak_refresh(&s_streak, &today);
-            rpg_quest_generate_daily(s_quests, RPG_QUEST_MAX_DAILY, &today);
-            rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
+            rpg_quest_generate_catalog(s_quests, RPG_QUEST_MAX_DAILY);
+            rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
             rpg_storage_save_streak(&s_streak);
 
             uint32_t today_serial = rpg_date_to_serial(&today);
@@ -590,7 +599,7 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
                 rpg_pet_on_quest_complete(&s_pet);
                 s_pet_last_serial = rpg_date_to_serial(&today);
                 rpg_storage_save_player(&s_player);
-                rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY, &today);
+                rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
                 rpg_storage_save_streak(&s_streak);
                 rpg_storage_save_pet(&s_pet, s_pet_last_serial);
                 if (s_quest_status) {
@@ -604,9 +613,8 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         break;
 
     case LIFE_VIEW_PET:
-        if (btn != BSP_BTN_OK && ev == BSP_BTN_PRESS) {
-            life_rpg_jump_mascot();
-        }
+        (void)btn;
+        (void)ev;
         break;
     }
 }
