@@ -14,6 +14,7 @@
 #include "rpg_date.h"
 #include "rpg_streak.h"
 #include "rpg_pet.h"
+#include "rpg_audio.h"
 #include "rpg_storage.h"
 #include "ui_pixel.h"
 #include "esp_log.h"
@@ -34,6 +35,7 @@ static lv_obj_t *s_scr;
 static lv_obj_t *s_battery;
 static lv_obj_t *s_level;
 static lv_obj_t *s_xp;
+static lv_obj_t *s_xp_bar;
 static lv_obj_t *s_stats;
 static lv_obj_t *s_streak_label;
 static lv_obj_t *s_home_cards[3];
@@ -104,6 +106,7 @@ static void clear_screen(void)
     s_battery = NULL;
     s_level = NULL;
     s_xp = NULL;
+    s_xp_bar = NULL;
     s_stats = NULL;
     s_streak_label = NULL;
     s_pet_mood = NULL;
@@ -133,6 +136,12 @@ static void life_rpg_jump_mascot(void)
     ui_pixel_mascot_jump(s_mascot);
 }
 
+static void load_screen(void)
+{
+    if (!s_scr) return;
+    lv_scr_load_anim(s_scr, LV_SCR_LOAD_ANIM_FADE_ON, 180, 0, false);
+}
+
 static void refresh_player(void)
 {
     if (!s_level || !s_xp || !s_stats) return;
@@ -141,6 +150,11 @@ static void refresh_player(void)
     lv_label_set_text_fmt(s_xp, "XP %u / %u",
                           (unsigned)s_player.xp,
                           (unsigned)rpg_xp_to_next_level(s_player.level));
+    if (s_xp_bar) {
+        uint32_t needed = rpg_xp_to_next_level(s_player.level);
+        lv_bar_set_range(s_xp_bar, 0, (int32_t)needed);
+        lv_bar_set_value(s_xp_bar, (int32_t)s_player.xp, LV_ANIM_ON);
+    }
     lv_label_set_text_fmt(s_stats, "BODY %u  CODE %u\nKNOWLEDGE %u",
                           (unsigned)s_player.stats[RPG_STAT_BODY],
                           (unsigned)s_player.stats[RPG_STAT_CODE],
@@ -170,6 +184,43 @@ static void refresh_pet(void)
 static void fx_fade(void *obj, int32_t value)
 {
     lv_obj_set_style_opa((lv_obj_t *)obj, (lv_opa_t)value, 0);
+}
+
+static void anim_y(void *obj, int32_t value)
+{
+    lv_obj_set_y((lv_obj_t *)obj, value);
+}
+
+static void play_level_up_feedback(void)
+{
+    if (!s_scr) return;
+
+    lv_obj_t *label = lv_label_create(s_scr);
+    lv_label_set_text(label, "LEVEL UP!");
+    lv_obj_set_width(label, 240);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(UI_YELLOW), 0);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(label, 0, 105);
+    lv_obj_set_style_opa(label, LV_OPA_COVER, 0);
+
+    lv_anim_t move;
+    lv_anim_init(&move);
+    lv_anim_set_var(&move, label);
+    lv_anim_set_exec_cb(&move, anim_y);
+    lv_anim_set_values(&move, 105, 60);
+    lv_anim_set_duration(&move, 700);
+    lv_anim_set_path_cb(&move, lv_anim_path_ease_out);
+    lv_anim_start(&move);
+
+    lv_anim_t fade;
+    lv_anim_init(&fade);
+    lv_anim_set_var(&fade, label);
+    lv_anim_set_exec_cb(&fade, fx_fade);
+    lv_anim_set_values(&fade, LV_OPA_COVER, LV_OPA_TRANSP);
+    lv_anim_set_duration(&fade, 1000);
+    lv_anim_set_path_cb(&fade, lv_anim_path_linear);
+    lv_anim_start(&fade);
 }
 
 static void play_completion_feedback(void)
@@ -280,7 +331,7 @@ static void build_home(void)
     s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
     s_mascot_base_y = 238;
     refresh_home();
-    lv_screen_load(s_scr);
+    load_screen();
 }
 
 static void build_player(void)
@@ -300,17 +351,25 @@ static void build_player(void)
     s_xp = lv_label_create(panel);
     lv_obj_set_style_text_font(s_xp, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_xp, lv_color_hex(UI_SKY_DARK), 0);
-    lv_obj_align(s_xp, LV_ALIGN_TOP_MID, 0, 32);
+    lv_obj_align(s_xp, LV_ALIGN_TOP_MID, 0, 28);
+
+    s_xp_bar = lv_bar_create(panel);
+    lv_obj_set_size(s_xp_bar, 176, 10);
+    lv_obj_align(s_xp_bar, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_set_style_radius(s_xp_bar, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_radius(s_xp_bar, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_xp_bar, lv_color_hex(UI_MUTED), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_xp_bar, lv_color_hex(UI_GRASS), LV_PART_INDICATOR);
 
     s_streak_label = lv_label_create(panel);
     lv_obj_set_style_text_font(s_streak_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_streak_label, lv_color_hex(UI_RED), 0);
-    lv_obj_align(s_streak_label, LV_ALIGN_TOP_MID, 0, 56);
+    lv_obj_align(s_streak_label, LV_ALIGN_TOP_MID, 0, 68);
 
     s_stats = lv_label_create(panel);
     lv_obj_set_style_text_font(s_stats, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_stats, lv_color_hex(UI_INK), 0);
-    lv_obj_align(s_stats, LV_ALIGN_TOP_MID, 0, 82);
+    lv_obj_align(s_stats, LV_ALIGN_TOP_MID, 0, 92);
 
     lv_obj_t *hint = lv_label_create(panel);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
@@ -321,7 +380,7 @@ static void build_player(void)
     s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
     s_mascot_base_y = 238;
     refresh_player();
-    lv_screen_load(s_scr);
+    load_screen();
 }
 
 static void build_quest_list(void)
@@ -349,7 +408,7 @@ static void build_quest_list(void)
     lv_obj_set_pos(hint, 16, 236);
 
     refresh_quest_list();
-    lv_screen_load(s_scr);
+    load_screen();
 }
 
 static void build_quest_detail(void)
@@ -386,7 +445,7 @@ static void build_quest_detail(void)
     s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
     s_mascot_base_y = 238;
     refresh_quest_detail();
-    lv_screen_load(s_scr);
+    load_screen();
 }
 
 static void build_pet(void)
@@ -427,7 +486,7 @@ static void build_pet(void)
     s_mascot = ui_pixel_mascot_create(s_scr, 101, 238);
     s_mascot_base_y = 238;
     refresh_pet();
-    lv_screen_load(s_scr);
+    load_screen();
 }
 
 void demo_life_rpg_enter(void)
@@ -493,6 +552,8 @@ void demo_life_rpg_enter(void)
         rpg_storage_save_pet(&s_pet, s_pet_last_serial);
     }
 
+    rpg_audio_start();
+
     s_view = LIFE_VIEW_HOME;
     s_home_sel = 0;
     s_quest_sel = 0;
@@ -507,6 +568,7 @@ void demo_life_rpg_exit(void)
     rpg_storage_save_quests(s_quests, RPG_QUEST_MAX_DAILY);
     rpg_storage_save_streak(&s_streak);
     rpg_storage_save_pet(&s_pet, s_pet_last_serial);
+    rpg_audio_stop();
     clear_screen();
 }
 
@@ -591,8 +653,10 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
     case LIFE_VIEW_QUEST_DETAIL:
         if (ev != BSP_BTN_CLICK) return;
         if (btn == BSP_BTN_OK) {
+            uint32_t old_level = s_player.level;
             uint32_t awarded = rpg_quest_complete(&s_quests[s_quest_sel], &s_player);
             if (awarded > 0) {
+                uint32_t levels_gained = s_player.level - old_level;
                 rpg_date_t today;
                 rpg_date_today(&today);
                 rpg_streak_on_quest_complete(&s_streak, &today);
@@ -607,6 +671,12 @@ void demo_life_rpg_key(bsp_btn_t btn, bsp_btn_ev_t ev)
                                           (unsigned)awarded);
                 }
                 play_completion_feedback();
+                if (levels_gained > 0) {
+                    play_level_up_feedback();
+                    rpg_audio_play_tone(1200, 180);
+                } else {
+                    rpg_audio_play_tone(800, 100);
+                }
             }
             life_rpg_jump_mascot();
         }
